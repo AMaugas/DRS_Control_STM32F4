@@ -1,0 +1,10 @@
+main.c:187:6:SystemClock_Config	96	static
+main.c:85:5:main	24	static
+main.c:227:1:__io_putchar	16	static
+main.c:236:6:HAL_GPIO_EXTI_Callback	0	static
+main.c:241:6:HAL_UART_RxCpltCallback	0	static
+main.c:251:6:resetToFactoryDefault	32	static
+main.c:287:6:askStat	24	static
+main.c:319:6:reboot	24	static
+main.c:351:6:changeID	48	static
+main.c:412:6:Error_Handler	0	static
