@@ -230,15 +230,6 @@ typedef struct _HerkulexServoBus
 	uint8_t m_tx_buffer[HERKULEX_SERIAL_TX_BUFFER];
 	uint8_t m_move_tags;
 	HerkulexScheduleState m_schedule_state;
-
-	void (*sendPacket)(struct _HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen);
-	/*
- 	void (*sendPacketAndReadResponse)(void *self, HerkulexPacket *resp, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen);
-	*/
-	void (*prepareIndividualMove)(struct _HerkulexServoBus *self);
-	void (*prepareSynchronizedMove)(struct _HerkulexServoBus *self, uint8_t playtime);
-	void (*executeMove)(struct _HerkulexServoBus *self);
-
 } HerkulexServoBus;
 
 HerkulexServoBus *initializeServoBus(UART_HandleTypeDef *HUART_Handler);

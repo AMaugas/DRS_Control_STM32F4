@@ -41,11 +41,8 @@ HerkulexServoBus *initializeServoBus(UART_HandleTypeDef *HUART_Handler)
         }
         servoBus->m_move_tags = 0;
         servoBus->m_schedule_state = HerkulexScheduleState_None;
-
-        servoBus->sendPacket = &sendPacket;
-/*         servoBus->sendPacketAndReadResponse = &sendPacketAndReadResponse;
- */    }
-return servoBus;
+    }
+    return servoBus;
 }
 
 void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen)
@@ -53,9 +50,9 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
     uint8_t checksum1;
     uint8_t checksum2;
     uint8_t packetSize = 7 + dataLen;
-    /* uint8_t packet[7] = {0xFF, 0xFF, packetSize, id, (uint8_t)cmd, 0x00, 0x00}; */
+    uint8_t packet[7] = {0xFF, 0xFF, packetSize, id, (uint8_t)cmd, 0x00, 0x00};
+    /* uint8_t packet[packetSize]; */
 
-    uint8_t packet[packetSize];
     packet[0] = 0xFF;
     packet[1] = 0xFF;
     packet[2] = packetSize;
@@ -69,7 +66,7 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
         for (uint8_t i = 0; i < dataLen; i++)
         {
             checksum1 ^= *(pData + i);
-            packet[7 + i] = *(pData + i);
+            /* packet[7 + i] = *(pData + i); */
         }
     }
 
@@ -79,7 +76,7 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
     packet[5] = checksum1;
     packet[6] = checksum2;
 
-/* 
+
     HAL_UART_Transmit(self->m_serial, packet, 7, 10);
     printf("Data transmitted: 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X", packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6]);
 
@@ -93,15 +90,15 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
     }
 
     printf("\n\r");
- */
 
-    HAL_UART_Transmit(self->m_serial, packet, packetSize, 10);
-    printf("Packet sent : ");
-    for (uint8_t i = 0; i < packetSize;i++)
-    {
-        printf("0x%.2X ", packet[i]);
-    }
-    printf("\n\r");
+
+//    HAL_UART_Transmit(self->m_serial, packet, packetSize, 10);
+//    printf("Packet sent : ");
+//    for (uint8_t i = 0; i < packetSize; i++)
+//    {
+//        printf("0x%.2X ", packet[i]);
+//    }
+//    printf("\n\r");
 }
 
 void prepareIndividualMove(HerkulexServoBus *self)
@@ -125,12 +122,12 @@ void executeMove(HerkulexServoBus *self)
     {
     case HerkulexScheduleState_IndividualMove:
         dataLen = self->m_move_tags * 5;
-        self->sendPacket(self, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, self->m_tx_buffer, dataLen);
+        sendPacket(self, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, self->m_tx_buffer, dataLen);
         break;
 
     case HerkulexScheduleState_SynchronizedMove:
         dataLen = 1 + self->m_move_tags * 4;
-        self->sendPacket(self, HERKULEX_BROADCAST_ID, HerkulexCommand_SJog, self->m_tx_buffer, dataLen);
+        sendPacket(self, HERKULEX_BROADCAST_ID, HerkulexCommand_SJog, self->m_tx_buffer, dataLen);
         break;
 
     case HerkulexScheduleState_None:
@@ -173,7 +170,7 @@ void jog(HerkulexServo *servo, uint8_t jog_lsb, uint8_t jog_msb, uint8_t set, ui
         *(servo->m_tx_buffer + 2) = set;
         *(servo->m_tx_buffer + 3) = servo->m_id;
         *(servo->m_tx_buffer + 4) = playtime;
-        servo->m_bus->sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
+        sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
         break;
 
     case HerkulexScheduleState_IndividualMove:
@@ -315,7 +312,7 @@ void writeRam(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
     *(servo->m_tx_buffer + 1) = 1;
     *(servo->m_tx_buffer + 2) = val;
 
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 3);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 3);
 }
 
 void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
@@ -325,7 +322,7 @@ void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
     *(servo->m_tx_buffer + 2) = (uint8_t)val;
     *(servo->m_tx_buffer + 3) = (uint8_t)(val >> 8);
 
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 4);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 4);
 }
 
 void writeEep(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
@@ -334,7 +331,7 @@ void writeEep(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
     *(servo->m_tx_buffer + 1) = 1;
     *(servo->m_tx_buffer + 2) = val;
 
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 3);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 3);
 }
 
 void writeEep2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
@@ -344,7 +341,7 @@ void writeEep2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
     *(servo->m_tx_buffer + 2) = (uint8_t)val;
     *(servo->m_tx_buffer + 3) = (uint8_t)(val >> 8);
 
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 4);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 4);
 }
 
 void enablePositionControlMode(HerkulexServo *servo)
@@ -368,7 +365,7 @@ void enablePositionControlMode(HerkulexServo *servo)
     *(servo->m_tx_buffer + 3) = servo->m_id;
     *(servo->m_tx_buffer + 4) = 0x00;
 
-    servo->m_bus->sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
+    sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
 }
 
 void enableSpeedControlMode(HerkulexServo *servo)
@@ -390,11 +387,11 @@ void enableSpeedControlMode(HerkulexServo *servo)
     *(servo->m_tx_buffer + 2) = set;
     *(servo->m_tx_buffer + 3) = servo->m_id;
     *(servo->m_tx_buffer + 4) = 0x00; /* playtime */
-    servo->m_bus->sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
+    sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
 }
 void servoReboot(HerkulexServo *servo)
 {
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Reboot, NULL, 0);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Reboot, NULL, 0);
 }
 
 void rollBackToFactoryDefault(HerkulexServo *servo, uint8_t skipID, uint8_t skipBaud)
@@ -402,5 +399,5 @@ void rollBackToFactoryDefault(HerkulexServo *servo, uint8_t skipID, uint8_t skip
     *(servo->m_tx_buffer + 0) = skipID ? 1 : 0;
     *(servo->m_tx_buffer + 1) = skipBaud ? 1 : 0;
 
-    servo->m_bus->sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Rollback, servo->m_tx_buffer, 2);
+    sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Rollback, servo->m_tx_buffer, 2);
 }

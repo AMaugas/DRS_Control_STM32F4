@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include "HerkulexServo.h"
 
-HerkulexServo *articulations[8];
 
 typedef enum _articulation
 {
@@ -31,7 +30,9 @@ typedef enum _walkPhase
     WalkPhase_One,
     WalkPhase_Two,
     WalkPhase_Three,
-    WalkPhase_Four
+    WalkPhase_Four,
+    WalkPhase_Five,
+    WalkPhase_Six
 } WalkPhase;
 
 void walk(HerkulexServo **articulations, uint8_t numberOfStep);

@@ -99,10 +99,16 @@ int main(void)
 	passed = 0;
 
 	HerkulexServoBus *herkulexBus = initializeServoBus(&huart5);
-	// HerkulexServo *chevilleDroite = initializeServo(herkulexBus, 0x32);
-	// HerkulexServo *genouDroit = initializeServo(herkulexBus, 0x31);
-	HerkulexServo *oldServo = initializeServo(herkulexBus, 0xFD);
-	HerkulexServo *newServo = initializeServo(herkulexBus, 0xCA);
+	HerkulexServo *servo_chevilleDroite = initializeServo(herkulexBus, 0xDA);
+	HerkulexServo *servo_genouDroit = initializeServo(herkulexBus, 0xDC);
+	HerkulexServo *servo_hancheDroite = initializeServo(herkulexBus, 0xDB);
+	HerkulexServo *servo_bassinDroit = initializeServo(herkulexBus, 0xCB);
+	HerkulexServo *servo_bassinGauche = initializeServo(herkulexBus, 0xBB);
+	HerkulexServo *servo_hancheGauche = initializeServo(herkulexBus, 0xDD);
+	HerkulexServo *servo_genouGauche = initializeServo(herkulexBus, 0xCA);
+	HerkulexServo *servo_chevilleGauche = initializeServo(herkulexBus, 0xCC);
+
+	HerkulexServo *articulations[8] = {servo_chevilleDroite, servo_genouDroit, servo_hancheDroite, servo_bassinDroit, servo_bassinGauche, servo_hancheGauche, servo_genouGauche, servo_chevilleGauche};
 	/* USER CODE END Init */
 
 	/* Configure the system clock */
@@ -118,8 +124,12 @@ int main(void)
 	MX_USART2_UART_Init();
 	MX_DMA_Init();
 	/* USER CODE BEGIN 2 */
-	// setTorqueOn(chevilleDroite);
-	// setTorqueOn(genouDroit);
+	for (uint8_t i = 0; i < 8; i++)
+	{
+		setTorqueOn(articulations[i]);
+	}
+
+	initialisePosition(articulations);
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -128,14 +138,7 @@ int main(void)
 	{
 		if (buttonPressed)
 		{
-			HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-
-			//			setPosition(chevilleDroite, 512, 100, HerkulexLed_Blue);
-			//			setPosition(genouDroit, 512, 100, HerkulexLed_Blue);
-			writeEep(oldServo, HerkulexEepRegister_ID, 0xCA);
-			writeRam(oldServo, HerkulexRamRegister_ID, 0xCA);
-			writeEep(newServo, HerkulexEepRegister_BaudRate, 0x22);
-			//		  passed = 0;
+			walk(articulations, 10);
 			buttonPressed = 0;
 		}
 
