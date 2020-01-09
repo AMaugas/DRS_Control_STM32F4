@@ -76,7 +76,6 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
     packet[5] = checksum1;
     packet[6] = checksum2;
 
-
     HAL_UART_Transmit(self->m_serial, packet, 7, 10);
     printf("Data transmitted: 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X", packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6]);
 
@@ -91,24 +90,191 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
 
     printf("\n\r");
 
-
-//    HAL_UART_Transmit(self->m_serial, packet, packetSize, 10);
-//    printf("Packet sent : ");
-//    for (uint8_t i = 0; i < packetSize; i++)
-//    {
-//        printf("0x%.2X ", packet[i]);
-//    }
-//    printf("\n\r");
+    //    HAL_UART_Transmit(self->m_serial, packet, packetSize, 10);
+    //    printf("Packet sent : ");
+    //    for (uint8_t i = 0; i < packetSize; i++)
+    //    {
+    //        printf("0x%.2X ", packet[i]);
+    //    }
+    //    printf("\n\r");
 }
 
+void processPacket(HerkulexServoBus *bus, const uint8_t dataLen)
+{
+    uint8_t bytesToProcess = 0;
+    uint8_t dataIdx = 0;
+    uint8_t chkSum1 = 0;
+    uint8_t chkSum2 = 0;
+    HerkulexParserState parserState = HerkulexParserState_Header1;
+
+    HAL_UART_Receive(bus->m_serial, bus->m_rx_buffer, dataLen, 10);
+
+    if ((bus->m_rx_buffer[0] != 0xFF) || (bus->m_rx_buffer[1] != 0xFF))
+    {
+        return;
+    }
+
+    bytesToProcess = bus->m_rx_buffer[2];
+
+    while (bytesToProcess > 0)
+    {
+        uint8_t recByte = bus->m_rx_buffer[bus->m_rx_buffer[2] - bytesToProcess];
+
+        switch (parserState)
+        {
+        case HerkulexParserState_Header1:
+            if (recByte == 0xFF)
+            {
+                parserState = HerkulexParserState_Header2;
+            }
+            break;
+
+        case HerkulexParserState_Header2:
+            if (recByte == 0xFF)
+            {
+                parserState = HerkulexParserState_Length;
+            }
+            else
+            {
+                parserState = HerkulexParserState_Header1;
+            }
+            break;
+
+        case HerkulexParserState_Length:
+            bus->m_rx_packet.size = recByte;
+            chkSum1 = recByte;
+            parserState = HerkulexParserState_ID;
+            break;
+
+        case HerkulexParserState_ID:
+            bus->m_rx_packet.id = recByte;
+            chkSum1 ^= recByte;
+            parserState = HerkulexParserState_Command;
+            break;
+
+        case HerkulexParserState_Command:
+            bus->m_rx_packet.cmd = (HerkulexCommand)recByte;
+            chkSum1 ^= recByte;
+            parserState = HerkulexParserState_Checksum1;
+            break;
+
+        case HerkulexParserState_Checksum1:
+            bus->m_rx_packet.checksum1 = recByte;
+            parserState = HerkulexParserState_Checksum2;
+            break;
+
+        case HerkulexParserState_Checksum2:
+            bus->m_rx_packet.checksum2 = recByte;
+            parserState = HerkulexParserState_Data;
+            break;
+
+        case HerkulexParserState_Data:
+            bus->m_rx_packet.data[dataIdx] = recByte;
+            chkSum1 ^= recByte;
+            dataIdx++;
+
+            if (dataIdx > HERKULEX_PACKET_RX_MAX_DATA)
+            {
+                dataIdx = HERKULEX_PACKET_RX_MAX_DATA;
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    if (dataIdx >= 2)
+    {
+        bus->m_rx_packet.status_error = bus->m_rx_packet.data[dataIdx - 2];
+        bus->m_rx_packet.status_detail = bus->m_rx_packet.data[dataIdx - 1];
+    }
+
+    chkSum1 = chkSum1 & 0xFE;
+    chkSum2 = (~chkSum1) & 0xFE;
+
+    if (chkSum1 != bus->m_rx_packet.checksum1 || chkSum2 != bus->m_rx_packet.checksum2)
+    {
+        bus->m_rx_packet.error |= HerkulexPacketError_Checksum;
+    }
+
+    bus->m_rx_packet_ready = 1;
+}
+
+uint8_t getPacket(HerkulexServoBus *bus, HerkulexPacket *response)
+{
+    if (bus->m_rx_packet_ready == 0)
+    {
+        return 0;
+    }
+
+    response->size = bus->m_rx_packet.size;
+    response->id = bus->m_rx_packet.id;
+    response->cmd = bus->m_rx_packet.cmd;
+    response->checksum1 = bus->m_rx_packet.checksum1;
+    response->checksum2 = bus->m_rx_packet.checksum2;
+    for (uint8_t i = 0; i < HERKULEX_PACKET_RX_MAX_DATA; i++)
+    {
+        response->data[i] = bus->m_rx_packet.data[i];
+    }
+    response->status_error = bus->m_rx_packet.status_error;
+    response->status_detail = bus->m_rx_packet.status_detail;
+    response->error = bus->m_rx_packet.error;
+
+    bus->m_rx_packet_ready = 0;
+    return 1;
+}
+
+uint8_t sendPacketAndWaitResponse(HerkulexServoBus *self, HerkulexPacket *response, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen)
+{
+    uint8_t success = 0;
+    uint32_t time_started = 0;
+    uint8_t dataLenToReceive;
+
+    if (cmd == HerkulexCommand_Stat)
+    {
+        dataLenToReceive = 9; /* 7 minimal bytes + status_error + status_detail */
+    }
+    else
+    {
+        dataLenToReceive = 9 + *(pData + 1);
+    }
+
+    self->m_rx_packet_ready = 0;
+
+    for (uint8_t attempts = 0; attempts < HERKULEX_PACKET_RETRIES; attempts++)
+    {
+        sendPacket(self, id, cmd, pData, dataLen);
+
+        time_started = HAL_GetTick();
+
+        while (!getPacket(self, response) && ((HAL_GetTick() - time_started) < HERKULEX_PACKET_RX_TIMEOUT))
+        {
+            processPacket(self, dataLenToReceive);
+        }
+
+        if ((response->error == HerkulexPacketError_None) && (response->id = id) && (response->cmd == (cmd | 0x40)))
+        {
+            success = 1;
+            break;
+        }
+        else
+        {
+            HAL_Delay(HERKULEX_PACKET_RX_TIMEOUT);
+        }
+    }
+    return success;
+}
 void prepareIndividualMove(HerkulexServoBus *self)
 {
     self->m_schedule_state = HerkulexScheduleState_IndividualMove;
     self->m_move_tags = 0;
 }
 
-void prepareSynchronizedMove(HerkulexServoBus *self, uint8_t playtime)
+void prepareSynchronizedMove(HerkulexServoBus *self, uint16_t time_ms)
 {
+    uint8_t playtime = (uint8_t)(time_ms / 11.2f);
+
     self->m_schedule_state = HerkulexScheduleState_SynchronizedMove;
     *(self->m_tx_buffer + 0) = playtime;
     self->m_move_tags = 0;
@@ -210,8 +376,14 @@ void jog(HerkulexServo *servo, uint8_t jog_lsb, uint8_t jog_msb, uint8_t set, ui
     }
 }
 
-void setPosition(HerkulexServo *servo, uint16_t pos, uint8_t playtime, HerkulexLed led)
+void setPosition(HerkulexServo *servo, float degree, uint8_t time_ms, HerkulexLed led)
 {
+    uint16_t pos;
+
+    pos = (uint16_t)(512 + (degree / 0.325f));
+
+    uint8_t playtime = (uint8_t)(time_ms / 11.2f);
+
     if (!servo->m_position_control_mode)
     {
         return;
@@ -237,8 +409,10 @@ void setPosition(HerkulexServo *servo, uint16_t pos, uint8_t playtime, HerkulexL
     jog(servo, jog_lsb, jog_msb, set, playtime);
 }
 
-void setSpeed(HerkulexServo *servo, uint16_t speed, uint8_t playtime, HerkulexLed led)
+void setSpeed(HerkulexServo *servo, uint16_t speed, uint16_t time_ms, HerkulexLed led)
 {
+    uint8_t playtime = (uint8_t)(time_ms / 11.2f);
+
     if (servo->m_position_control_mode)
     {
         return;
@@ -306,6 +480,7 @@ void setLedColor(HerkulexServo *servo, HerkulexLed color)
     servo->m_led = color;
     writeRam(servo, HerkulexRamRegister_LedControl, (uint8_t)color);
 }
+
 void writeRam(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
@@ -325,7 +500,7 @@ void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 4);
 }
 
-void writeEep(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
+void writeEep(HerkulexServo *servo, HerkulexEepRegister reg, uint8_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
     *(servo->m_tx_buffer + 1) = 1;
@@ -334,7 +509,7 @@ void writeEep(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 3);
 }
 
-void writeEep2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
+void writeEep2(HerkulexServo *servo, HerkulexEepRegister reg, uint16_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
     *(servo->m_tx_buffer + 1) = 2;
@@ -343,6 +518,20 @@ void writeEep2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
 
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 4);
 }
+
+uint8_t readRam(HerkulexServo *servo, HerkulexRamRegister reg)
+{
+    servo->m_tx_buffer[0] = (uint8_t)reg;
+    servo->m_tx_buffer[1] = 1;
+
+    sendPacketAndWaitResponse(servo->m_bus, servo->m_response, servo->m_id, HerkulexCommand_RamRead, servo->m_tx_buffer, 2);
+
+    return servo->m_response->data[2];
+}
+
+uint16_t readRam2(HerkulexServo *servo, HerkulexRamRegister reg);
+uint8_t readEep(HerkulexServo *servo, HerkulexEepRegister reg);
+uint8_t readEep2(HerkulexServo *servo, HerkulexEepRegister reg);
 
 void enablePositionControlMode(HerkulexServo *servo)
 {
@@ -389,6 +578,7 @@ void enableSpeedControlMode(HerkulexServo *servo)
     *(servo->m_tx_buffer + 4) = 0x00; /* playtime */
     sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
 }
+
 void servoReboot(HerkulexServo *servo)
 {
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Reboot, NULL, 0);

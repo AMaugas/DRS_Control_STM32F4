@@ -1,0 +1,2 @@
+servoControl.c:144:6:initialisePosition	24	static
+servoControl.c:10:6:walk	32	static

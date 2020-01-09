@@ -14,38 +14,46 @@
 
 #include "usart.h"
 
+/* Broadcast ID to send a command to all servos */
 #define HERKULEX_BROADCAST_ID 0xFE
 
+/* Minimum size for the TX buffer */
 #define SERVO_TX_BUFFER_SIZE sizeof(uint8_t) * 5
 
+/* Timeout for sending packet */
 #ifndef HERKULEX_PACKET_RX_TIMEOUT
-#define HERKULEX_PACKET_RX_TIMEOUT 100 // microseconds
+#define HERKULEX_PACKET_RX_TIMEOUT 1 // milliseconds
 #endif
 
+/* Retries before considering failed communication */
 #ifndef HERKULEX_PACKET_RETRIES
 #define HERKULEX_PACKET_RETRIES 6
 #endif
 
+/* Delay before trying to resend packet */
 #ifndef HERKULEX_PACKET_RESEND_DELAY
 #define HERKULEX_PACKET_RESEND_DELAY 70 // microseconds
 #endif
 
+/* Maximum data sent to the servo */
 #ifndef HERKULEX_PACKET_RX_MAX_DATA
-#define HERKULEX_PACKET_RX_MAX_DATA 10 // bytes
+#define HERKULEX_PACKET_RX_MAX_DATA 4 // bytes
 #endif
 
 #ifndef HERKULEX_SERIAL_RX_BUFFER
 #define HERKULEX_SERIAL_RX_BUFFER 30 // bytes
 #endif
 
+/* Number of servo to controll */
 #ifndef HERKULEX_MAX_SCHEDULED_SERVOS
-#define HERKULEX_MAX_SCHEDULED_SERVOS 10
+#define HERKULEX_MAX_SCHEDULED_SERVOS 8
 #endif
 
 #ifndef HERKULEX_SERIAL_TX_BUFFER
 #define HERKULEX_SERIAL_TX_BUFFER (1 + HERKULEX_MAX_SCHEDULED_SERVOS * 5)
 #endif
 
+/* Hex code of the command */
 typedef enum
 {
 	HerkulexCommand_None = 0x00,
@@ -60,6 +68,7 @@ typedef enum
 	HerkulexCommand_Reboot = 0x09
 } HerkulexCommand;
 
+/* Values of the EEP register */
 typedef enum
 {
 	HerkulexEepRegister_ModelNo1 = 0,
@@ -100,6 +109,7 @@ typedef enum
 	HerkulexEepRegister_CalibrationDifference = 53
 } HerkulexEepRegister;
 
+/* Values of the RAM register */
 typedef enum
 {
 	HerkulexRamRegister_ID = 0,
@@ -150,6 +160,7 @@ typedef enum
 	HerkulexRamRegister_DesiredVelocity = 72
 } HerkulexRamRegister;
 
+/* Hex values of the servo LED states */
 typedef enum
 {
 	HerkulexLed_Off = 0x00,
@@ -163,6 +174,7 @@ typedef enum
 	HerkulexLed_Ignore = 0xFF
 } HerkulexLed;
 
+/* Flags of the packet error */
 typedef enum
 {
 	HerkulexPacketError_None = 0,
@@ -172,6 +184,7 @@ typedef enum
 	HerkulexPacketError_Checksum = 0b00001000
 } HerkulexPacketError;
 
+/* Flags of the status error from the STAT command response */
 typedef enum
 {
 	HerkulexStatusError_None = 0,
@@ -185,6 +198,7 @@ typedef enum
 	HerkulexStatusError_Reserved = 0b10000000
 } HerkulexStatusError;
 
+/* Flags of the status detail from the STAT command response */
 typedef enum
 {
 	HerkulexStatusDetail_None = 0,
@@ -198,6 +212,7 @@ typedef enum
 	HerkulexStatusDetail_Reserved = 0b10000000
 } HerkulexStatusDetail;
 
+/* Scheduled bus state */
 typedef enum
 {
 	HerkulexScheduleState_None = 0,
@@ -205,6 +220,20 @@ typedef enum
 	HerkulexScheduleState_SynchronizedMove
 } HerkulexScheduleState;
 
+/* Received packet parser state */
+typedef enum
+{
+	HerkulexParserState_Header1,
+	HerkulexParserState_Header2,
+	HerkulexParserState_Length,
+	HerkulexParserState_ID,
+	HerkulexParserState_Command,
+	HerkulexParserState_Checksum1,
+	HerkulexParserState_Checksum2,
+	HerkulexParserState_Data
+} HerkulexParserState;
+
+/* Structure of a packet (send and receive) */
 typedef struct
 {
 	uint8_t size;
@@ -221,7 +250,7 @@ typedef struct
 typedef struct _HerkulexServoBus
 {
 	UART_HandleTypeDef *m_serial;
-	uint8_t m_rx_buffer[HERKULEX_PACKET_RX_MAX_DATA];
+	uint8_t m_rx_buffer[7 + HERKULEX_PACKET_RX_MAX_DATA];
 	uint64_t m_last_serial;
 
 	HerkulexPacket m_rx_packet;
@@ -233,9 +262,14 @@ typedef struct _HerkulexServoBus
 } HerkulexServoBus;
 
 HerkulexServoBus *initializeServoBus(UART_HandleTypeDef *HUART_Handler);
+
 void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen);
+void processPacket(HerkulexServoBus *bus, const uint8_t dataLen);
+uint8_t getPacket(HerkulexServoBus *bus, HerkulexPacket *response);
+uint8_t sendPacketAndWaitResponse(HerkulexServoBus *self, HerkulexPacket *response, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen);
+
 void prepareIndividualMove(HerkulexServoBus *self);
-void prepareSynchronizedMove(HerkulexServoBus *self, uint8_t playtime);
+void prepareSynchronizedMove(HerkulexServoBus *self, uint16_t time_ms);
 void executeMove(HerkulexServoBus *self);
 
 typedef struct _HerkulexServo
@@ -250,20 +284,25 @@ typedef struct _HerkulexServo
 } HerkulexServo;
 
 HerkulexServo *initializeServo(HerkulexServoBus *servoBus, uint8_t id);
+
 void jog(HerkulexServo *servo, uint8_t jog_lsb, uint8_t jog_msb, uint8_t set, uint8_t playtime);
-void setPosition(HerkulexServo *servo, uint16_t pos, uint8_t playtime, HerkulexLed led);
-void setSpeed(HerkulexServo *servo, uint16_t speed, uint8_t playtime, HerkulexLed led);
+void setPosition(HerkulexServo *servo, float degree, uint8_t time_ms, HerkulexLed led);
+void setSpeed(HerkulexServo *servo, uint16_t speed, uint16_t time_ms, HerkulexLed led);
 
 void setTorqueOn(HerkulexServo *servo);
 void setTorqueOff(HerkulexServo *servo);
 void setBrake(HerkulexServo *servo);
-
 void setLedColor(HerkulexServo *servo, HerkulexLed color);
 
 void writeRam(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val);
 void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val);
-void writeEep(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val);
-void writeEep2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val);
+void writeEep(HerkulexServo *servo, HerkulexEepRegister reg, uint8_t val);
+void writeEep2(HerkulexServo *servo, HerkulexEepRegister reg, uint16_t val);
+
+uint8_t readRam(HerkulexServo *servo, HerkulexRamRegister reg);
+uint16_t readRam2(HerkulexServo *servo, HerkulexRamRegister reg);
+uint8_t readEep(HerkulexServo *servo, HerkulexEepRegister reg);
+uint8_t readEep2(HerkulexServo *servo, HerkulexEepRegister reg);
 
 void enablePositionControlMode(HerkulexServo *servo);
 void enableSpeedControlMode(HerkulexServo *servo);

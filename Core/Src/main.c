@@ -130,6 +130,7 @@ int main(void)
 	}
 
 	initialisePosition(articulations);
+	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -138,47 +139,10 @@ int main(void)
 	{
 		if (buttonPressed)
 		{
+			HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
 			walk(articulations, 10);
 			buttonPressed = 0;
 		}
-
-		//	  if (!passed)
-		//	  {
-		//		  HAL_UART_Receive_IT(&huart5, rData, sizeof(rData));
-		//		  passed = 1;
-		//	  }
-		//
-		//	  if (receivedUART)
-		//	  {
-		//		  printf("receivedUart: \n\r");
-		//		  for (uint8_t i = 0; i < sizeof(rData); i++)
-		//		  {
-		//			  printf("0x%.2X ", rData[i]);
-		//		  }
-		//		  printf("\n\r");
-		//		  receivedUART = 0;
-		//	  }
-
-		//	  if (receivedUART)
-
-		//	  {
-		//		  uint16_t bufferSize = huart5.RxXferSize;
-		//
-		//		  for (uint16_t i = 0; i < bufferSize; i++)
-		//		  {
-		//			  uint8_t character = huart5.pRxBuffPtr[i];
-		//			  printf("Coucou");
-		//		  }
-		//		  receivedUART = 0;
-		//	  }
-
-		/* USER CODE END WHILE */
-
-		/* USER CODE BEGIN 3 */
-		//	  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin); // PORTA, PA5
-		//	  HAL_Delay(500);
-		//	  nLoop++;
-		//	  printf("nLoop == %lu \n\r", nLoop);
 	}
 	/* USER CODE END 3 */
 }
