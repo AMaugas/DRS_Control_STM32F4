@@ -247,6 +247,7 @@ typedef struct
 	HerkulexPacketError error;
 } HerkulexPacket;
 
+/* Structure of the ServoBus used to send and receive the data */
 typedef struct _HerkulexServoBus
 {
 	UART_HandleTypeDef *m_serial;
@@ -272,6 +273,7 @@ void prepareIndividualMove(HerkulexServoBus *self);
 void prepareSynchronizedMove(HerkulexServoBus *self, uint16_t time_ms);
 void executeMove(HerkulexServoBus *self);
 
+/* Structure of a Servomotor */
 typedef struct _HerkulexServo
 {
 	HerkulexServoBus *m_bus;

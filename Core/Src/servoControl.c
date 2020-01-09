@@ -128,6 +128,7 @@ void walk(HerkulexServo **articulations, uint8_t numberOfStep)
             setPosition(*(articulations + hancheGauche), 30.0f, 0, HerkulexLed_Yellow);
 
             executeMove((**(articulations + 0)).m_bus);
+
             setLedColor(*(articulations + bassinDroit), HerkulexLed_Yellow);
             setLedColor(*(articulations + bassinGauche), HerkulexLed_Yellow);
             setLedColor(*(articulations + chevilleDroite), HerkulexLed_Yellow);

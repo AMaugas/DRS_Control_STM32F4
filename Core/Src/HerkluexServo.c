@@ -7,6 +7,11 @@
 
 #include "HerkulexServo.h"
 
+/**
+  * @brief  Initialize the servo bus structure
+  * @param  HUART_Handler : A pointer to the UART handler used to communicate with the servomotors
+  * @retval Initialized ServoBus structure
+  */
 HerkulexServoBus *initializeServoBus(UART_HandleTypeDef *HUART_Handler)
 {
     HerkulexServoBus *servoBus = (HerkulexServoBus *)malloc(sizeof(HerkulexServoBus));
@@ -45,6 +50,15 @@ HerkulexServoBus *initializeServoBus(UART_HandleTypeDef *HUART_Handler)
     return servoBus;
 }
 
+/** 
+    @brief Construct and end a specific UART packet
+    @param self : The ServoBus used to communicate
+    @param id : Servomotor ID
+    @param cmd : enum of the command to send to the servo
+    @param pData : array of optional data to send
+    @param dataLen : Lenght of the pData array
+    @retval None
+ */
 void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen)
 {
     uint8_t checksum1;
@@ -99,6 +113,12 @@ void sendPacket(HerkulexServoBus *self, uint8_t id, HerkulexCommand cmd, uint8_t
     //    printf("\n\r");
 }
 
+/**
+ * @brief Process a received packet
+ * @param bus : ServoBus receiving the data
+ * @param dataLen : Lenght of the data to receive
+ * @retval None
+  */
 void processPacket(HerkulexServoBus *bus, const uint8_t dataLen)
 {
     uint8_t bytesToProcess = 0;
@@ -201,6 +221,12 @@ void processPacket(HerkulexServoBus *bus, const uint8_t dataLen)
     bus->m_rx_packet_ready = 1;
 }
 
+/**
+ * @brief Transfer the data from the ServoBus buffer to the appropriate Servo data structure
+ * @param bus : ServoBus to extract data from
+ * @param response : pointer to the data structure of the receiving Servo
+ * @retval Success or not of the function
+  */
 uint8_t getPacket(HerkulexServoBus *bus, HerkulexPacket *response)
 {
     if (bus->m_rx_packet_ready == 0)
@@ -225,6 +251,17 @@ uint8_t getPacket(HerkulexServoBus *bus, HerkulexPacket *response)
     return 1;
 }
 
+/**
+ * @brief Send a packet trough the bus and wait for the Servo to repond.
+ *        Once the Servo responded, the response is stored in is internal data structure
+ * @param self : Pointer to the ServoBus used for communication
+ * @param response : Pointer the the Packet structure of the Servo
+ * @param id : ID of the Servo
+ * @param cmd : Enum of the command to send
+ * @param pData : Array of the optional additional data to send
+ * @param dataLen : Lenght of the data array
+ * @retval Succes or not
+ */
 uint8_t sendPacketAndWaitResponse(HerkulexServoBus *self, HerkulexPacket *response, uint8_t id, HerkulexCommand cmd, uint8_t *pData, uint8_t dataLen)
 {
     uint8_t success = 0;
@@ -265,12 +302,26 @@ uint8_t sendPacketAndWaitResponse(HerkulexServoBus *self, HerkulexPacket *respon
     }
     return success;
 }
+
+/**
+ * @brief Switch the state of the bus to individual move
+ * @note In individual move, each servo will be controlled independently from each other
+ * @param self : The ServoBus
+ * @retval None
+ */
 void prepareIndividualMove(HerkulexServoBus *self)
 {
     self->m_schedule_state = HerkulexScheduleState_IndividualMove;
     self->m_move_tags = 0;
 }
 
+/**
+ * @brief Switch the state of the ServoBus to execute synchronized move of the Servos
+ * @note In synchronised move, the Servs will all have the same time to execute the position change
+ * @param self : The ServoBus
+ * @param time_ms : The time, in milliseconds, allowed to the Servos to execute the move
+ * @retval None
+ */
 void prepareSynchronizedMove(HerkulexServoBus *self, uint16_t time_ms)
 {
     uint8_t playtime = (uint8_t)(time_ms / 11.2f);
@@ -280,6 +331,11 @@ void prepareSynchronizedMove(HerkulexServoBus *self, uint16_t time_ms)
     self->m_move_tags = 0;
 }
 
+/**
+ * @brief Execute the move scheduled on the ServoBus and switch the scheduled state to none
+ * @param self : The ServoBus to execute the moves from
+ * @retval None
+ */
 void executeMove(HerkulexServoBus *self)
 {
     uint8_t dataLen;
@@ -304,9 +360,18 @@ void executeMove(HerkulexServoBus *self)
     self->m_move_tags = 0;
 }
 
+/* Structure used to store the servos responses */
 HerkulexPacket m_response = {0, 0, HerkulexCommand_None, 0, 0, {0}, HerkulexStatusError_None, HerkulexStatusDetail_None, HerkulexPacketError_None};
+
+/* Array used to store the tx data from the servos */
 uint8_t tx_buffer[5] = {0, 0, 0, 0, 0};
 
+/**
+ * @brief Initialize a Servo structure, assiciating a ServoBus and an ID to that Servo
+ * @param servoBus : Pointer to the servoBus used to communicate with the Servo
+ * @param id : ID of the Servo
+ * @retval Pointer to an initialized structure
+ */
 HerkulexServo *initializeServo(HerkulexServoBus *servoBus, uint8_t id)
 {
     HerkulexServo *servo = (HerkulexServo *)malloc(sizeof(HerkulexServo));
@@ -324,6 +389,15 @@ HerkulexServo *initializeServo(HerkulexServoBus *servoBus, uint8_t id)
     return servo;
 }
 
+/**
+ * @brief Write the command to the appropriate tx buffer depending on the ServoBus scheduled state
+ * @param servo : Pointer to the servo to control
+ * @param jog_lsb : og command lsb
+ * @param jog_msb : Jog command msb
+ * @param set
+ * @param playtime : Playtime of the movement
+ * @retval None
+ */
 void jog(HerkulexServo *servo, uint8_t jog_lsb, uint8_t jog_msb, uint8_t set, uint8_t playtime)
 {
     uint8_t idx_offset;
@@ -376,6 +450,14 @@ void jog(HerkulexServo *servo, uint8_t jog_lsb, uint8_t jog_msb, uint8_t set, ui
     }
 }
 
+/**
+ * @brief Set the servo to the desired position
+ * @param servo : Pointer to the Servo to control
+ * @param degree : Desired position in degree
+ * @param time_ms : Time allowed to execute the move, in milliseconds
+ * @param led : Color of the Servo led
+ * @retval None
+ */
 void setPosition(HerkulexServo *servo, float degree, uint8_t time_ms, HerkulexLed led)
 {
     uint16_t pos;
@@ -409,6 +491,14 @@ void setPosition(HerkulexServo *servo, float degree, uint8_t time_ms, HerkulexLe
     jog(servo, jog_lsb, jog_msb, set, playtime);
 }
 
+/**
+ * @brief Set the rotation speed of the Servo
+ * @param servo : Pointer to the Servo to control
+ * @param speed : Rotation speed
+ * @param time_ms : Time of the rotation in milliseconds
+ * @param led : Led color of the Servo
+ * @retval None
+ */
 void setSpeed(HerkulexServo *servo, uint16_t speed, uint16_t time_ms, HerkulexLed led)
 {
     uint8_t playtime = (uint8_t)(time_ms / 11.2f);
@@ -455,21 +545,42 @@ void setSpeed(HerkulexServo *servo, uint16_t speed, uint16_t time_ms, HerkulexLe
     jog(servo, jog_lsb, jog_msb, set, playtime);
 }
 
+/**
+ * @brief Set the torque ON on the desired Servo
+ * @param servo : Pointer to the Servo to control
+ * @retval None
+ */
 void setTorqueOn(HerkulexServo *servo)
 {
     writeRam(servo, HerkulexRamRegister_TorqueControl, 0x60);
 }
 
+/**
+ * @brief Set the torque OFF on the desired Servo
+ * @param servo : Pointer to the Servo to control
+ * @retval None
+ */
 void setTorqueOff(HerkulexServo *servo)
 {
     writeRam(servo, HerkulexRamRegister_TorqueControl, 0x00);
 }
 
+/**
+ * @brief Set the brake on the desired Servo
+ * @param servo : Pointer to the Servo to controll
+ * @retval None
+ */
 void setBrake(HerkulexServo *servo)
 {
     writeRam(servo, HerkulexRamRegister_TorqueControl, 0x40);
 }
 
+/**
+ * @brief Set the led color of the desired Servo
+ * @param servo : Pointer to the Servo to control
+ * @param color : desired led color
+ * @retval None
+ */
 void setLedColor(HerkulexServo *servo, HerkulexLed color)
 {
     if (color == HerkulexLed_Ignore)
@@ -481,6 +592,13 @@ void setLedColor(HerkulexServo *servo, HerkulexLed color)
     writeRam(servo, HerkulexRamRegister_LedControl, (uint8_t)color);
 }
 
+/**
+ * @brief Write the desired one byte value to a specified RAM register
+ * @param servo : Pointer to the Servo to control
+ * @param reg : register to write to
+ * @param val : value to write
+ * @retval None
+ */
 void writeRam(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
@@ -490,6 +608,13 @@ void writeRam(HerkulexServo *servo, HerkulexRamRegister reg, uint8_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 3);
 }
 
+/**
+ * @brief Write the desired two bytes value to a specified RAM register
+ * @param servo : Pointer to the Servo to control
+ * @param reg : register to write to
+ * @param val : value to write
+ * @retval None
+ */
 void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
@@ -500,6 +625,13 @@ void writeRam2(HerkulexServo *servo, HerkulexRamRegister reg, uint16_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_RamWrite, servo->m_tx_buffer, 4);
 }
 
+/**
+ * @brief Write the desired one byte value to a specified EEP register
+ * @param servo : Pointer to the Servo to control
+ * @param reg : register to write to
+ * @param val : value to write
+ * @retval None
+ */
 void writeEep(HerkulexServo *servo, HerkulexEepRegister reg, uint8_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
@@ -509,6 +641,13 @@ void writeEep(HerkulexServo *servo, HerkulexEepRegister reg, uint8_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 3);
 }
 
+/**
+ * @brief Write the desired two bytes value to a specified EEP register
+ * @param servo : Pointer to the Servo to control
+ * @param reg : register to write to
+ * @param val : value to write
+ * @retval None
+ */
 void writeEep2(HerkulexServo *servo, HerkulexEepRegister reg, uint16_t val)
 {
     *(servo->m_tx_buffer + 0) = (uint8_t)reg;
@@ -519,6 +658,12 @@ void writeEep2(HerkulexServo *servo, HerkulexEepRegister reg, uint16_t val)
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_EepWrite, servo->m_tx_buffer, 4);
 }
 
+/**
+ * @brief Read a specific one byte value from the Servo RAM register
+ * @param servo : Pointer to the servo to read from
+ * @param reg : register to read
+ * @retval Value of the register
+ */
 uint8_t readRam(HerkulexServo *servo, HerkulexRamRegister reg)
 {
     servo->m_tx_buffer[0] = (uint8_t)reg;
@@ -529,10 +674,35 @@ uint8_t readRam(HerkulexServo *servo, HerkulexRamRegister reg)
     return servo->m_response->data[2];
 }
 
+/**
+ * @brief Read a specific two bytes value from the Servo RAM register
+ * @param servo : Pointer to the servo to read from
+ * @param reg : register to read
+ * @retval Value of the register
+ */
 uint16_t readRam2(HerkulexServo *servo, HerkulexRamRegister reg);
+
+/**
+ * @brief Read a specific one byte value from the Servo EEP register
+ * @param servo : Pointer to the servo to read from
+ * @param reg : register to read
+ * @retval Value of the register
+ */
 uint8_t readEep(HerkulexServo *servo, HerkulexEepRegister reg);
+
+/**
+ * @brief Read a specific two bytes value from the Servo RAM register
+ * @param servo : Pointer to the servo to read from
+ * @param reg : register to read
+ * @retval Value of the register
+ */
 uint8_t readEep2(HerkulexServo *servo, HerkulexEepRegister reg);
 
+/**
+ * @brief enable the position control mode of the servo
+ * @param servo : Pointer to the Servo to control
+ * @retval None
+ */
 void enablePositionControlMode(HerkulexServo *servo)
 {
     if (servo->m_position_control_mode)
@@ -557,6 +727,11 @@ void enablePositionControlMode(HerkulexServo *servo)
     sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
 }
 
+/**
+ * @brief enable the speed control mode for the Servo
+ * @param servo : Pointer to the Servo to control
+ * @retval None
+ */
 void enableSpeedControlMode(HerkulexServo *servo)
 {
     if (!servo->m_position_control_mode)
@@ -579,11 +754,23 @@ void enableSpeedControlMode(HerkulexServo *servo)
     sendPacket(servo->m_bus, HERKULEX_BROADCAST_ID, HerkulexCommand_IJog, servo->m_tx_buffer, 5);
 }
 
+/**
+ * @brief Reboot the servo
+ * @param servo : Pointer to the Servo to control
+ * @retval None
+ */
 void servoReboot(HerkulexServo *servo)
 {
     sendPacket(servo->m_bus, servo->m_id, HerkulexCommand_Reboot, NULL, 0);
 }
 
+/**
+ * @brief Reset the Servo EEP values to the factory default, option is given to skip changing the ID and baud rate of the Servo
+ * @param servo : Pointer to the Servo to reset
+ * @param skipID : 0 for no, 1 for yes
+ * @param skipBaud : 0 for no, 1 for yes
+ * @retval None
+ */
 void rollBackToFactoryDefault(HerkulexServo *servo, uint8_t skipID, uint8_t skipBaud)
 {
     *(servo->m_tx_buffer + 0) = skipID ? 1 : 0;
